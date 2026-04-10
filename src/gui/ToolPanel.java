@@ -12,6 +12,7 @@ import java.io.File;
 
 public class ToolPanel extends JPanel {
     private GraphPanel graphPanel;
+    private File lastDirectory = new File("./test-graphs"); // default to project test folder
 
     public ToolPanel(GraphPanel graphPanel) {
         this.graphPanel = graphPanel;
@@ -31,12 +32,17 @@ public class ToolPanel extends JPanel {
 
         add(tutteBtn);
         add(frBtn);
+
+        JButton resetBtn = new JButton("Reset View");
+        resetBtn.addActionListener(e -> graphPanel.resetView());
+        add(resetBtn);
     }
 
     private void loadFile() {
-        JFileChooser chooser = new JFileChooser();
+        JFileChooser chooser = new JFileChooser(lastDirectory);
         if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
             File file = chooser.getSelectedFile();
+            lastDirectory = file.getParentFile(); // remember this folder for next time
             try {
                 Graph graph = new GraphReader().read(file.getAbsolutePath());
                 graphPanel.setGraph(graph);

@@ -24,8 +24,11 @@ public class Tutte extends LayoutAlgorithm {
     private static final double WIDTH     = 800;
     private static final double HEIGHT    = 600;
 
-    // Radius of the outer circle (in pixels)
-    private static final double RADIUS    = Math.min(WIDTH, HEIGHT) * 0.4;
+    // Margin from canvas edge so nodes and their labels are never clipped
+    private static final double PADDING   = 30;
+
+    // Radius of the outer circle, shrunk to stay inside the padded area
+    private static final double RADIUS    = Math.min(WIDTH, HEIGHT) * 0.4 - PADDING;
 
     private static final int    MAX_ITER  = 1000;
     private static final double TOLERANCE = 1e-6;

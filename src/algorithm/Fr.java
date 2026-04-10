@@ -25,6 +25,9 @@ public class Fr extends LayoutAlgorithm {
     private static final double WIDTH      = 800;
     private static final double HEIGHT     = 600;
 
+    // Margin from canvas edge so nodes and their labels are never clipped
+    private static final double PADDING    = 30;
+
     // Small value to avoid division by zero when two nodes overlap exactly
     private static final double EPSILON    = 1e-4;
 
@@ -50,11 +53,11 @@ public class Fr extends LayoutAlgorithm {
         double temperature = WIDTH / 10.0;
         double dt          = temperature / ITERATIONS; // cooling step per iteration
 
-        // Place all nodes at random starting positions within the canvas
+        // Place all nodes at random starting positions within the padded area
         Random rng = new Random();
         for (Node node : graph.nodes) {
-            node.X = rng.nextDouble() * WIDTH;
-            node.Y = rng.nextDouble() * HEIGHT;
+            node.X = PADDING + rng.nextDouble() * (WIDTH  - 2 * PADDING);
+            node.Y = PADDING + rng.nextDouble() * (HEIGHT - 2 * PADDING);
         }
 
         // Per-node displacement vectors, reused each iteration
@@ -112,9 +115,9 @@ public class Fr extends LayoutAlgorithm {
                 graph.nodes.get(i).X += (dispX[i] / dist) * limitedDist;
                 graph.nodes.get(i).Y += (dispY[i] / dist) * limitedDist;
 
-                // Keep nodes inside the canvas boundaries
-                graph.nodes.get(i).X = Math.max(0, Math.min(WIDTH,  graph.nodes.get(i).X));
-                graph.nodes.get(i).Y = Math.max(0, Math.min(HEIGHT, graph.nodes.get(i).Y));
+                // Keep nodes inside the padded canvas boundaries
+                graph.nodes.get(i).X = Math.max(PADDING, Math.min(WIDTH  - PADDING, graph.nodes.get(i).X));
+                graph.nodes.get(i).Y = Math.max(PADDING, Math.min(HEIGHT - PADDING, graph.nodes.get(i).Y));
             }
 
             // ── D. Cool down ──────────────────────────────────────────────────

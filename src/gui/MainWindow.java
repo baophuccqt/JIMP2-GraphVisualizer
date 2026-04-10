@@ -14,12 +14,11 @@ public class MainWindow extends JFrame {
         setLayout(new BorderLayout());
 
         graphPanel = new GraphPanel();
-        toolPanel = new ToolPanel(graphPanel);
+        toolPanel  = new ToolPanel(graphPanel);
 
-        add(toolPanel, BorderLayout.WEST);
+        add(toolPanel,  BorderLayout.WEST);
         add(graphPanel, BorderLayout.CENTER);
 
         setVisible(true);
     }
-    
 }
