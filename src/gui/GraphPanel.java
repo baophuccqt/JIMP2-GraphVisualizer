@@ -20,19 +20,82 @@ public class GraphPanel extends JPanel {
     private int dragStartX, dragStartY;
 
     private static final int    NODE_RADIUS  = 10;
-    private static final double ZOOM_FACTOR  = 1.05; // 5% per scroll tick
+    private static final double ZOOM_FACTOR  = 1.03; // 3% per scroll tick
 
-    public GraphPanel() {
+    private static Node selectedNode = null;
+
+    public GraphPanel(CoordinatePanel coordinatePanel) {
         setBackground(Color.WHITE);
-        addMouseWheelListener(this::onScroll);
+        addMouseWheelListener(l -> {
+            try {
+                onScroll(l);
+                coordinatePanel.setScale(scale);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
+
         addMouseListener(new MouseAdapter() {
             @Override public void mousePressed(MouseEvent e) {
                 dragStartX = e.getX();
                 dragStartY = e.getY();
+
+                // coordinates that we that checking for dragging
+                double gx = (e.getX() - offsetX) / scale;
+                double gy = (e.getY() - offsetY) / scale;
+                double dist = Double.MAX_VALUE;
+                Node tmpNode = null;
+
+                if (graph == null) {
+                    return;
+                }
+
+                for (Node node: graph.nodes) {
+                    double distance = Math.sqrt((gx - node.X) * (gx - node.X) + (gy - node.Y) * (gy - node.Y));
+                    if (dist > distance) {
+                        dist = distance;
+                        tmpNode = node;
+                    }
+                }
+
+                if (dist < NODE_RADIUS / scale) {
+                    selectedNode = tmpNode;
+                } else {
+                    selectedNode = null;
+                }
+            }
+
+            @Override public void mouseReleased(MouseEvent e) {
+                dragStartX = e.getX();
+                dragStartY = e.getY();
             }
         });
+
         addMouseMotionListener(new MouseMotionAdapter() {
             @Override public void mouseDragged(MouseEvent e) {
+                if (selectedNode != null) {
+                    selectedNode.X += (e.getX() - dragStartX) / scale;
+                    selectedNode.Y += (e.getY() - dragStartY) / scale;
+                } else {
+                    offsetX += e.getX() - dragStartX;
+                    offsetY += e.getY() - dragStartY;
+                }
+
+                dragStartX = e.getX();
+                dragStartY = e.getY();
+
+                repaint();
+            }
+        });
+
+        addMouseMotionListener(new MouseMotionAdapter() {
+            @Override public void mouseMoved(MouseEvent e) {
+                double gx = (e.getX() - offsetX) / scale;
+                double gy = (e.getY() - offsetY) / scale;
+                coordinatePanel.setCordinates(gx, gy);
+            }
+
+            @Override public void  mouseDragged(MouseEvent e) {
                 offsetX += e.getX() - dragStartX;
                 offsetY += e.getY() - dragStartY;
                 dragStartX = e.getX();
@@ -64,6 +127,8 @@ public class GraphPanel extends JPanel {
         // getPreciseWheelRotation() handles touchpad fractional values correctly.
         // getWheelRotation() truncates to int, causing touchpad events near 0 to always zoom in.
         double factor = (e.getPreciseWheelRotation() < 0) ? ZOOM_FACTOR : 1.0 / ZOOM_FACTOR;
+        if (scale * factor >= 50000) return;
+
         double mx = e.getX();
         double my = e.getY();
         offsetX = mx - factor * (mx - offsetX);
@@ -83,6 +148,16 @@ public class GraphPanel extends JPanel {
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
         if (graph == null) return;
+
+        g.setColor(new Color(200, 200, 200));
+        int spacing =  20;
+
+        // small dots pattern
+        for (int x = 0; x < getWidth(); x += spacing) {
+            for (int y = 0; y < getHeight(); y += spacing) {
+                g.fillOval(x - 1, y - 1, 2, 2);
+            }
+        }
 
         Graphics2D g2 = (Graphics2D) g;
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);

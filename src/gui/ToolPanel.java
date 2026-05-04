@@ -8,30 +8,71 @@ import model.Graph;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.ItemEvent;
 import java.io.File;
 
 public class ToolPanel extends JPanel {
     private GraphPanel graphPanel;
     private File lastDirectory = new File("./test-graphs"); // default to project test folder
+    public LayoutAlgorithm currentAlgorithm = new Tutte();
+    private JTextField pathField = new  JTextField("Last location: (none)");
 
     public ToolPanel(GraphPanel graphPanel) {
         this.graphPanel = graphPanel;
         setLayout(new BoxLayout(this, BoxLayout.Y_AXIS)); // so it locates vertically
         setPreferredSize(new Dimension(150, 0));
 
-        JButton loadBtn = new JButton("Load File");
-        loadBtn.addActionListener(e -> loadFile());
 
-        add(loadBtn);
+        // Select file button
+        JButton selectBtn = new JButton("Select File");
+        selectBtn.addActionListener(e -> loadFile());
+        add(selectBtn);
 
-        JButton tutteBtn = new JButton("Run Tutte");
-        tutteBtn.addActionListener(e -> runLayout(new Tutte()));
 
-        JButton frBtn = new JButton("Run FR");
-        frBtn.addActionListener(e -> runLayout(new Fr()));
+        // Path field show chosen file's directory
+        pathField.setFont(pathField.getFont().deriveFont(10f));
+        pathField.setMaximumSize(new Dimension(Integer.MAX_VALUE, pathField.getPreferredSize().height));
+        pathField.setEditable(false);
+        add(pathField);
 
-        add(tutteBtn);
-        add(frBtn);
+
+
+        // EXport to PNG button
+        JLabel textAction = new JLabel("Actions");
+        add(textAction);
+        JButton exportBtn = new JButton("Export PNG");
+        exportBtn.addActionListener(e -> exportPNG());
+        add(exportBtn);
+
+
+        // Algorithm options
+        JLabel textAlgo = new JLabel("Algorithm");
+        JRadioButton tutteRadio = new JRadioButton("Tutte");
+        // need to setSelected befor add ItemListener
+        // if we do it in a reverse way, it's gonna trigger layout before we even load the graph
+        tutteRadio.setSelected(true);
+        tutteRadio.addItemListener(e -> {
+            if (e.getStateChange() == ItemEvent.SELECTED) {
+                currentAlgorithm = new Tutte();
+                runLayout(currentAlgorithm);
+            }
+        });
+        add(textAlgo);
+        add(tutteRadio);
+
+        JRadioButton frRadio = new JRadioButton("FR");
+        frRadio.addItemListener(e -> {
+            if (e.getStateChange() == ItemEvent.SELECTED) {
+                currentAlgorithm = new Fr();
+                runLayout(currentAlgorithm);
+            }
+        });
+        add(frRadio);
+
+        // group them together
+        ButtonGroup group = new ButtonGroup();
+        group.add(tutteRadio);
+        group.add(frRadio);
 
         JButton resetBtn = new JButton("Reset View");
         resetBtn.addActionListener(e -> graphPanel.resetView());
@@ -50,6 +91,9 @@ public class ToolPanel extends JPanel {
                 JOptionPane.showMessageDialog(this, "Error: " + exception.getMessage());
             }
         }
+
+        pathField.setText("Last location: " + lastDirectory.getAbsolutePath());
+        runLayout(currentAlgorithm);
     }
 
     private void runLayout(LayoutAlgorithm algorithm) {
@@ -61,5 +105,9 @@ public class ToolPanel extends JPanel {
 
         algorithm.layout(graph);
         graphPanel.repaint();
+    }
+
+    private void exportPNG() {
+
     }
 }
