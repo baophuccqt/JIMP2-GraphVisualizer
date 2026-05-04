@@ -24,6 +24,13 @@ public class GraphPanel extends JPanel {
 
     private static Node selectedNode = null;
 
+    //method for labels
+    private boolean showLabels = true;
+    public void setShowLabels(boolean showLabels) {
+        this.showLabels = showLabels;
+        repaint(); // odśwież widok po zmianie
+    }
+
     public GraphPanel(CoordinatePanel coordinatePanel) {
         setBackground(Color.WHITE);
         addMouseWheelListener(l -> {
@@ -163,6 +170,7 @@ public class GraphPanel extends JPanel {
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
         AffineTransform original = g2.getTransform();
+        AffineTransform at = new AffineTransform();
         g2.translate(offsetX, offsetY);
         g2.scale(scale, scale);
 
@@ -194,7 +202,25 @@ public class GraphPanel extends JPanel {
             double x2 = b.X - ux * r;
             double y2 = b.Y - uy * r;
 
+            g2.setColor(Color.BLACK);
             g2.draw(new Line2D.Double(x1, y1, x2, y2));
+
+            //drawing labels for edges
+            if (showLabels) {
+                double midX = (x1 + x2) / 2;
+                double midY = (y1 + y2) / 2;
+
+                AffineTransform labelsAt = g2.getTransform();
+                g2.translate(midX, midY);
+                g2.scale(1/scale, 1/scale);
+
+                g2.setColor(Color.BLUE);
+                String label = String.format("%.2f", e.len);
+                g2.drawString(label, 0, 0);
+
+                g2.setTransform(labelsAt);
+            }
+
         }
 
         // Restore transform so nodes stay fixed size on screen
@@ -207,8 +233,10 @@ public class GraphPanel extends JPanel {
             g2.setColor(Color.RED);
             g2.fillOval(sx - NODE_RADIUS, sy - NODE_RADIUS, NODE_RADIUS * 2, NODE_RADIUS * 2);
 
-            g2.setColor(Color.BLACK);
-            g2.drawString(String.valueOf(node.id), sx + NODE_RADIUS + 2, sy + 4);
+            if (showLabels) {
+                g2.setColor(Color.BLACK);
+                g2.drawString("ID: " + node.id, sx + NODE_RADIUS, sy - NODE_RADIUS);
+            }
         }
     }
 }
