@@ -11,6 +11,10 @@ import java.awt.*;
 import java.awt.event.ItemEvent;
 import java.io.File;
 
+import java.awt.image.BufferedImage;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+
 public class ToolPanel extends JPanel {
     private GraphPanel graphPanel;
     private File lastDirectory = new File("./test-graphs"); // default to project test folder
@@ -108,6 +112,64 @@ public class ToolPanel extends JPanel {
     }
 
     private void exportPNG() {
+        // 1. Sprawdzenie czy graf został wczytany
+        Graph graph = graphPanel.getGraph();
+        if (graph == null) {
+            JOptionPane.showMessageDialog(this, "Error: No graph loaded to export.");
+            return;
+        }
 
+        // 2. Przygotowanie folderu /output w katalogu projektu
+        File outputDir = new File("./output");
+        if (!outputDir.exists()) {
+            boolean created = outputDir.mkdir();
+            if (!created) {
+                JOptionPane.showMessageDialog(this, "Error: Could not create output directory.");
+                return;
+            }
+        }
+
+        // 3. Konfiguracja okna wyboru pliku domyślnie w folderze output
+        JFileChooser saveChooser = new JFileChooser(outputDir);
+        saveChooser.setDialogTitle("Save graph as PNG");
+
+        if (saveChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+            File file = saveChooser.getSelectedFile();
+
+            // Dodanie rozszerzenia .png jeśli użytkownik go nie wpisał
+            String path = file.getAbsolutePath();
+            if (!path.toLowerCase().endsWith(".png")) {
+                file = new File(path + ".png");
+            }
+
+            try {
+                // 4. Tworzenie obrazu o wymiarach panelu graficznego
+                BufferedImage image = new BufferedImage(
+                        graphPanel.getWidth(),
+                        graphPanel.getHeight(),
+                        BufferedImage.TYPE_INT_RGB
+                );
+
+                // 5. Renderowanie zawartości GraphPanel na obrazie
+                Graphics2D g2 = image.createGraphics();
+
+                // Dodanie antyaliasingu dla lepszej jakości eksportu
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+
+                graphPanel.paintAll(g2);
+                g2.dispose();
+
+                // 6. Zapis pliku do formatu PNG
+                if (javax.imageio.ImageIO.write(image, "png", file)) {
+                    JOptionPane.showMessageDialog(this, "Export successful!");
+                } else {
+                    JOptionPane.showMessageDialog(this, "Error: Standard PNG writer not found.");
+                }
+
+            } catch (Exception e) {
+                JOptionPane.showMessageDialog(this, "Error during export: " + e.getMessage());
+                e.printStackTrace();
+            }
+        }
     }
 }
