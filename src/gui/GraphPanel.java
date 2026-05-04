@@ -12,6 +12,7 @@ import java.awt.geom.Line2D;
 
 public class GraphPanel extends JPanel {
     private Graph graph;
+    private CoordinatePanel coordinatePanel;
 
     private double scale   = 1.0;
     private double offsetX = 0;
@@ -32,16 +33,13 @@ public class GraphPanel extends JPanel {
     }
 
     public GraphPanel(CoordinatePanel coordinatePanel) {
+        this.coordinatePanel = coordinatePanel;
         setBackground(Color.WHITE);
-        addMouseWheelListener(l -> {
-            try {
-                onScroll(l);
-                coordinatePanel.setScale(scale);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        });
 
+        // Zoom feature
+        addMouseWheelListener(e -> onScroll(e));
+
+        // Select and release node
         addMouseListener(new MouseAdapter() {
             @Override public void mousePressed(MouseEvent e) {
                 dragStartX = e.getX();
@@ -78,11 +76,22 @@ public class GraphPanel extends JPanel {
             }
         });
 
+        // Mouse drag
         addMouseMotionListener(new MouseMotionAdapter() {
+            @Override public void mouseMoved(MouseEvent e) {
+                double gx = (e.getX() - offsetX) / scale;
+                double gy = (e.getY() - offsetY) / scale;
+                coordinatePanel.setCordinates(gx, gy);
+            }
+
             @Override public void mouseDragged(MouseEvent e) {
                 if (selectedNode != null) {
                     selectedNode.X += (e.getX() - dragStartX) / scale;
                     selectedNode.Y += (e.getY() - dragStartY) / scale;
+
+                    double gx = (e.getX() - offsetX) / scale;
+                    double gy = (e.getY() - offsetY) / scale;
+                    coordinatePanel.setCordinates(gx, gy);
                 } else {
                     offsetX += e.getX() - dragStartX;
                     offsetY += e.getY() - dragStartY;
@@ -91,22 +100,6 @@ public class GraphPanel extends JPanel {
                 dragStartX = e.getX();
                 dragStartY = e.getY();
 
-                repaint();
-            }
-        });
-
-        addMouseMotionListener(new MouseMotionAdapter() {
-            @Override public void mouseMoved(MouseEvent e) {
-                double gx = (e.getX() - offsetX) / scale;
-                double gy = (e.getY() - offsetY) / scale;
-                coordinatePanel.setCordinates(gx, gy);
-            }
-
-            @Override public void  mouseDragged(MouseEvent e) {
-                offsetX += e.getX() - dragStartX;
-                offsetY += e.getY() - dragStartY;
-                dragStartX = e.getX();
-                dragStartY = e.getY();
                 repaint();
             }
         });
@@ -141,6 +134,8 @@ public class GraphPanel extends JPanel {
         offsetX = mx - factor * (mx - offsetX);
         offsetY = my - factor * (my - offsetY);
         scale  *= factor;
+
+        coordinatePanel.setScale(scale);
         repaint();
     }
 

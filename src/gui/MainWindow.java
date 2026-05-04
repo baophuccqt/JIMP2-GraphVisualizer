@@ -8,7 +8,6 @@ public class MainWindow extends JFrame {
     public GraphPanel graphPanel;
     public ToolPanel toolPanel;
     public CoordinatePanel coordinatePanel;
-    public ViewPort viewPort;
 
     public MainWindow() {
         setTitle("Graph Visualizer");
@@ -18,18 +17,12 @@ public class MainWindow extends JFrame {
         setLayout(new BorderLayout());
 
         coordinatePanel = new CoordinatePanel();
-        // add paddings to cordinate panel (did it this way because there is no such
+        // add paddings to coordinate panel (did it this way because there is no such
         // thing called padding in Swing)
         coordinatePanel.setBorder( new EmptyBorder(10, 10, 10, 10));
 
         graphPanel = new GraphPanel(coordinatePanel);
         toolPanel  = new ToolPanel(graphPanel);
-
-//        viewPort = new ViewPort();
-//        JPanel northPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-//        northPanel.setOpaque(false);
-//        northPanel.add(viewPort);
-//        add(northPanel, BorderLayout.NORTH);
 
         add(toolPanel,  BorderLayout.EAST);
         add(graphPanel, BorderLayout.CENTER);
