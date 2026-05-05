@@ -81,7 +81,7 @@ public class GraphPanel extends JPanel {
             @Override public void mouseMoved(MouseEvent e) {
                 double gx = (e.getX() - offsetX) / scale;
                 double gy = (e.getY() - offsetY) / scale;
-                coordinatePanel.setCordinates(gx, gy);
+                coordinatePanel.setCoordinates(gx, gy);
             }
 
             @Override public void mouseDragged(MouseEvent e) {
@@ -91,7 +91,7 @@ public class GraphPanel extends JPanel {
 
                     double gx = (e.getX() - offsetX) / scale;
                     double gy = (e.getY() - offsetY) / scale;
-                    coordinatePanel.setCordinates(gx, gy);
+                    coordinatePanel.setCoordinates(gx, gy);
                 } else {
                     offsetX += e.getX() - dragStartX;
                     offsetY += e.getY() - dragStartY;
