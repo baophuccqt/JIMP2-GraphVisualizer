@@ -11,7 +11,7 @@ public class MainWindow extends JFrame {
 
     public MainWindow() {
         setTitle("Graph Visualizer");
-        setSize(900, 600);
+        setSize(1200, 800);
         setMinimumSize(new Dimension(300, 200));
         setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         setLayout(new BorderLayout());

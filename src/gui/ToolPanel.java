@@ -1,15 +1,18 @@
 package gui;
 
-import algorithm.Fr;
 import algorithm.LayoutAlgorithm;
-import algorithm.Tutte;
 import io.GraphReader;
 import model.Graph;
+import algorithm.PanamaFruchterman;
+import algorithm.PanamaTutte;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ItemEvent;
 import java.io.File;
+import java.io.FileWriter;
+import java.io.PrintWriter;
+import java.io.IOException;
 
 import java.awt.image.BufferedImage;
 import java.awt.Graphics2D;
@@ -18,7 +21,7 @@ import java.awt.RenderingHints;
 public class ToolPanel extends JPanel {
     private GraphPanel graphPanel;
     private File lastDirectory = new File("./test-graphs"); // default to project test folder
-    public LayoutAlgorithm currentAlgorithm = new Tutte();
+    public LayoutAlgorithm currentAlgorithm = new PanamaTutte();
     private JTextField pathField = new  JTextField("Last location: (none)");
 
     public ToolPanel(GraphPanel graphPanel) {
@@ -54,6 +57,10 @@ public class ToolPanel extends JPanel {
         exportBtn.addActionListener(e -> exportPNG());
         add(exportBtn);
 
+        JButton exportTextBtn = new JButton("Export to TXT");
+        exportTextBtn.addActionListener(e -> exportToText());
+        add(exportTextBtn);
+
 
         // Algorithm options
         JLabel textAlgo = new JLabel("Algorithm");
@@ -63,21 +70,22 @@ public class ToolPanel extends JPanel {
         tutteRadio.setSelected(true);
         tutteRadio.addItemListener(e -> {
             if (e.getStateChange() == ItemEvent.SELECTED) {
-                currentAlgorithm = new Tutte();
+                currentAlgorithm = new PanamaTutte();
                 runLayout(currentAlgorithm);
             }
         });
         add(textAlgo);
         add(tutteRadio);
 
-        JRadioButton frRadio = new JRadioButton("FR");
+        JRadioButton frRadio = new JRadioButton("Fruchterman");
         frRadio.addItemListener(e -> {
             if (e.getStateChange() == ItemEvent.SELECTED) {
-                currentAlgorithm = new Fr();
+                currentAlgorithm = new PanamaFruchterman();
                 runLayout(currentAlgorithm);
             }
         });
         add(frRadio);
+
 
         // group them together
         ButtonGroup group = new ButtonGroup();
@@ -168,6 +176,53 @@ public class ToolPanel extends JPanel {
                 JOptionPane.showMessageDialog(this, "Error during export: " + e.getMessage());
                 e.printStackTrace();
             }
+        }
+    }
+    private void exportToText() {
+        Graph currentGraph = graphPanel.getGraph();
+        if (currentGraph == null) {
+            JOptionPane.showMessageDialog(this, "Error: No graph loaded to export.");
+            return;
+        }
+
+        JFileChooser saveChooser = new JFileChooser(lastDirectory);
+        saveChooser.setDialogTitle("Save graph as Text File");
+
+        if (saveChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+            File file = saveChooser.getSelectedFile();
+            String path = file.getAbsolutePath();
+
+            // Automatyczne dodawanie rozszerzenia .txt
+            if (!path.toLowerCase().endsWith(".txt")) {
+                path += ".txt";
+            }
+
+            // Wywołanie wbudowanej, stabilnej metody zapisu pliku tekstowego w Javie
+            exportToTxt(currentGraph, path);
+        }
+    }
+
+    // NOWA METODA: Bezpieczny i bezbłędny zapis po stronie wirtualnej maszyny Javy
+    public void exportToTxt(Graph javaGraph, String filePath) {
+        try (PrintWriter writer = new PrintWriter(new FileWriter(filePath))) {
+            writer.println("[WIERZCHOLKI]");
+            for (model.Node node : javaGraph.nodes) {
+                writer.printf(java.util.Locale.US, "ID_%s %.2f %.2f\n", node.id, node.X, node.Y);
+            }
+
+            writer.println("\n[KRAWEDZIE]");
+            for (int i = 0; i < javaGraph.edges.size(); i++) {
+                model.Edge edge = javaGraph.edges.get(i);
+                writer.printf(java.util.Locale.US, "E_%d ID_%s ID_%s %.2f\n",
+                        i, edge.startNode, edge.endNode, edge.len);
+            }
+
+            // Jeśli zapis się udał, wyświetlamy radosny komunikat o sukcesie
+            JOptionPane.showMessageDialog(this, "Graph successfully exported to text file!");
+
+        } catch (IOException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Error during text export: " + e.getMessage(), "I/O Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 }
