@@ -222,13 +222,6 @@ public class ToolPanel extends JPanel {
                 writer.printf(java.util.Locale.US, "ID_%s %.2f %.2f\n", node.id, node.X, node.Y);
             }
 
-            writer.println("\n[KRAWEDZIE]");
-            for (int i = 0; i < javaGraph.edges.size(); i++) {
-                model.Edge edge = javaGraph.edges.get(i);
-                writer.printf(java.util.Locale.US, "E_%d ID_%s ID_%s %.2f\n",
-                        i, edge.startNode, edge.endNode, edge.len);
-            }
-
             // Jeśli zapis się udał, wyświetlamy radosny komunikat o sukcesie
             JOptionPane.showMessageDialog(this, "Graph successfully exported to text file!");
 
