@@ -13,10 +13,18 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.PrintWriter;
 import java.io.IOException;
+import java.io.FileOutputStream;
+import java.io.BufferedOutputStream;
 
 import java.awt.image.BufferedImage;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Comparator;
 
 public class ToolPanel extends JPanel {
     private GraphPanel graphPanel;
@@ -50,10 +58,10 @@ public class ToolPanel extends JPanel {
 
 
 
-        // EXport to PNG button
+        // Export to PNG button
         JLabel textAction = new JLabel("Actions");
         add(textAction);
-        JButton exportBtn = new JButton("Export PNG");
+        JButton exportBtn = new JButton("Export to PNG");
         exportBtn.addActionListener(e -> exportPNG());
         add(exportBtn);
 
@@ -61,11 +69,15 @@ public class ToolPanel extends JPanel {
         exportTextBtn.addActionListener(e -> exportToText());
         add(exportTextBtn);
 
+        JButton exportBinBtn = new JButton("Export to binary");
+        exportBinBtn.addActionListener(e -> exportToBin());
+        add(exportBinBtn);
+
 
         // Algorithm options
         JLabel textAlgo = new JLabel("Algorithm");
         JRadioButton tutteRadio = new JRadioButton("Tutte");
-        // need to setSelected befor add ItemListener
+        // need to setSelected before add ItemListener
         // if we do it in a reverse way, it's gonna trigger layout before we even load the graph
         tutteRadio.setSelected(true);
         tutteRadio.addItemListener(e -> {
@@ -223,6 +235,53 @@ public class ToolPanel extends JPanel {
         } catch (IOException e) {
             e.printStackTrace();
             JOptionPane.showMessageDialog(this, "Error during text export: " + e.getMessage(), "I/O Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void exportToBin() {
+        Graph currentGraph = graphPanel.getGraph();
+        if (currentGraph == null) {
+            JOptionPane.showMessageDialog(this, "Error: No graph loaded to export.");
+            return;
+        }
+
+        JFileChooser saveChooser = new JFileChooser(lastDirectory);
+        saveChooser.setDialogTitle("Save graph as Binary File");
+
+        if (saveChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
+            File file = saveChooser.getSelectedFile();
+            String path = file.getAbsolutePath();
+
+            if (!path.toLowerCase().endsWith(".bin")) {
+                path += ".bin";
+            }
+
+            writeBinaryFile(currentGraph, path);
+        }
+    }
+
+    public void writeBinaryFile(Graph graph, String filePath) {
+        // Sort id ascending
+        // Copy it to isolate the output files and the lists used for drawing
+        List<model.Node> sortedNodes = new ArrayList<>(graph.nodes);
+        sortedNodes.sort(Comparator.comparingInt(n -> n.id));
+
+        try (BufferedOutputStream out = new BufferedOutputStream(new FileOutputStream(filePath))) {
+            // 20-byte buffer used for every vertex
+            ByteBuffer buffer = ByteBuffer.allocate(20).order(ByteOrder.LITTLE_ENDIAN);
+
+            for (model.Node node : sortedNodes) {
+                buffer.clear();
+                buffer.putInt(node.id);    // 4 byte, offset 0
+                buffer.putDouble(node.X);  // 8 byte, offset 4
+                buffer.putDouble(node.Y);  // 8 byte, offset 12
+                out.write(buffer.array()); // exactly 20 byte
+            }
+
+            JOptionPane.showMessageDialog(this, "Graph successfully exported to binary file! (" + (sortedNodes.size() * 20) + " bytes)");
+        } catch (IOException e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Error during binary export: " + e.getMessage(), "I/O Error", JOptionPane.ERROR_MESSAGE);
         }
     }
 }
