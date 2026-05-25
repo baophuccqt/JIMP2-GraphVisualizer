@@ -1,0 +1,738 @@
+\documentclass[12pt,a4paper]{article}
+
+% ── Packages ──────────────────────────────────────────────────────────────────
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{titlesec}
+\usepackage{fancyhdr}
+\usepackage{parskip}
+\usepackage{microtype}
+\usepackage{caption}
+\usepackage{float}
+\usepackage{mdframed}
+
+% ── Colour palette ────────────────────────────────────────────────────────────
+\definecolor{javakw}{RGB}{127,0,85}      % keywords  (Eclipse dark purple)
+\definecolor{javastr}{RGB}{42,0,255}     % strings   (blue)
+\definecolor{javacomment}{RGB}{63,127,95}% comments  (green)
+\definecolor{codebg}{RGB}{248,248,248}
+\definecolor{coderule}{RGB}{200,200,200}
+\definecolor{accent}{RGB}{0,90,160}
+
+% ── Java listings style ───────────────────────────────────────────────────────
+\lstdefinestyle{java}{
+  language=Java,
+  backgroundcolor=\color{codebg},
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{javakw}\bfseries,
+  stringstyle=\color{javastr},
+  commentstyle=\color{javacomment}\itshape,
+  numberstyle=\tiny\color{gray},
+  numbers=left,
+  numbersep=8pt,
+  frame=single,
+  rulecolor=\color{coderule},
+  breaklines=true,
+  breakatwhitespace=true,
+  showstringspaces=false,
+  tabsize=4,
+  captionpos=b,
+  morekeywords={var,record,sealed},
+}
+\lstdefinestyle{plain}{
+  language={},
+  backgroundcolor=\color{codebg},
+  basicstyle=\ttfamily\small,
+  keywordstyle={},
+  stringstyle={},
+  commentstyle={},
+  numberstyle=\tiny\color{gray},
+  numbers=left,
+  numbersep=8pt,
+  frame=single,
+  rulecolor=\color{coderule},
+  breaklines=true,
+  showstringspaces=false,
+  tabsize=4,
+  captionpos=b,
+}
+\lstdefinestyle{bash}{
+  language=bash,
+  backgroundcolor=\color{codebg},
+  basicstyle=\ttfamily\small,
+  keywordstyle=\color{javakw}\bfseries,
+  commentstyle=\color{javacomment}\itshape,
+  numberstyle=\tiny\color{gray},
+  numbers=left,
+  numbersep=8pt,
+  frame=single,
+  rulecolor=\color{coderule},
+  breaklines=true,
+  showstringspaces=false,
+  tabsize=2,
+  captionpos=b,
+}
+\lstset{style=java}
+
+% ── Header / footer ───────────────────────────────────────────────────────────
+\pagestyle{fancy}
+\fancyhf{}
+\lhead{\textcolor{accent}{\small JIMP2 — Java Implementation}}
+\rhead{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% ── Section formatting ────────────────────────────────────────────────────────
+\titleformat{\section}{\large\bfseries\color{accent}}{{\thesection}}{1em}{}[\titlerule]
+\titleformat{\subsection}{\normalsize\bfseries}{{\thesubsection}}{1em}{}
+
+% ── Hyperref ──────────────────────────────────────────────────────────────────
+\hypersetup{
+  colorlinks=true,
+  linkcolor=accent,
+  urlcolor=accent,
+  pdfauthor={Nghia Bao Phuc Ho},
+  pdftitle={JIMP2 Java Implementation Documentation},
+}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\begin{document}
+
+\begin{titlepage}
+  \centering
+  \vspace*{3cm}
+  {\Huge\bfseries\color{accent} Implementation Documentation}\\[0.8em]
+  {\Large JIMP2 — Java Edition}\\[2em]
+  \rule{0.6\textwidth}{1pt}\\[2em]
+  {\large Nghia Bao Phuc Ho}\\[0.5em]
+  {\normalsize May 2026}\\[3em]
+  \begin{mdframed}[backgroundcolor=codebg,linecolor=coderule]
+    \centering
+    \texttt{Graph Visualizer} · Java 17 · Swing GUI\\[0.3em]
+    Algorithms: Fruchterman-Reingold \& Tutte's Embedding
+  \end{mdframed}
+  \vfill
+  {\small
+    This document describes the Java implementation of the JIMP2 graph
+    visualisation project. It covers the data model, layout algorithms,
+    I/O layer, and interactive Swing GUI. Where relevant, design choices
+    are compared with the companion C implementation.}
+\end{titlepage}
+
+\tableofcontents
+\newpage
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Architecture Overview}
+% (No direct counterpart in the C doc — Java's OOP warrants its own section)
+
+Unlike the C implementation, which is structured as a flat collection of
+\texttt{.c} and \texttt{.h} files linked into a single binary, the Java
+project is divided into four packages with clearly separated
+responsibilities:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Package} & \textbf{Classes} & \textbf{Responsibility} \\
+\midrule
+\texttt{model}     & \texttt{Node}, \texttt{Edge}, \texttt{Graph}          & Pure data, no logic \\
+\texttt{io}        & \texttt{GraphReader}, \texttt{GraphWriter}             & File I/O \\
+\texttt{algorithm} & \texttt{LayoutAlgorithm}, \texttt{Fr}, \texttt{Tutte} & Layout algorithms \\
+\texttt{gui}       & \texttt{MainWindow}, \texttt{GraphPanel},             & Interactive GUI \\
+                   & \texttt{ToolPanel}, \texttt{CoordinatePanel}          & \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\medskip
+The application is single-threaded by design: all Swing events and
+layout computations run on the Event Dispatch Thread (EDT) via
+\texttt{SwingUtilities.invokeLater}.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Data Model}
+
+\subsection{Node}
+
+\texttt{Node} (in \texttt{model/Node.java}) is the Java equivalent of the
+C \texttt{vertex\_t} struct. It stores a unique integer \texttt{id} and
+mutable Cartesian coordinates \texttt{X}, \texttt{Y} that are updated
+in-place by the layout algorithms.
+
+\begin{lstlisting}[caption={Node class}]
+public class Node {
+    public int    id;
+    public double X;
+    public double Y;
+
+    public Node(int id, double X, double Y) {
+        this.id = id;  this.X = X;  this.Y = Y;
+    }
+}
+\end{lstlisting}
+
+\textbf{Design note.} All fields are \texttt{public} — the same philosophy
+as C struct fields — because the algorithms and renderer need direct, fast
+access without getter overhead. For a production codebase one would
+encapsulate these, but the lab context favours simplicity.
+
+\subsection{Edge}
+
+\texttt{Edge} (in \texttt{model/Edge.java}) maps to \texttt{edge\_t} in the
+C version. The \texttt{len} field carries the same semantic role as
+\texttt{weight} in C: a multiplier applied to the attractive force in
+Fruchterman-Reingold.
+
+\begin{lstlisting}[caption={Edge class}]
+public class Edge {
+    public String name;
+    public int    startNode;
+    public int    endNode;
+    public double len;          // edge weight (attractive-force multiplier)
+
+    public Edge(String name, int st, int en, double len) {
+        this.name = name;
+        this.startNode = st;
+        this.endNode   = en;
+        this.len       = len;
+    }
+}
+\end{lstlisting}
+
+\subsection{Graph}
+
+\texttt{Graph} (in \texttt{model/Graph.java}) is the top-level container.
+It replaces the C \texttt{graph\_t} struct together with its explicit
+\texttt{n\_vertices} and \texttt{n\_edges} counters; Java's
+\texttt{ArrayList} tracks size automatically.
+
+\begin{lstlisting}[caption={Graph class}]
+public class Graph {
+    public List<Node> nodes;
+    public List<Edge> edges;
+
+    public Graph() {
+        this.nodes = new ArrayList<>();
+        this.edges = new ArrayList<>();
+    }
+}
+\end{lstlisting}
+
+\textbf{Memory lifecycle.} Because Java uses garbage collection, there is
+no manual \texttt{graph\_free} equivalent. The GC reclaims all
+\texttt{Node}, \texttt{Edge}, and \texttt{Graph} objects once the
+\texttt{GraphPanel} drops its reference to the old graph when a new file
+is loaded.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Graph Loading — \texttt{GraphReader}}
+
+\texttt{GraphReader.read(String filename)} in \texttt{io/GraphReader.java}
+is the Java counterpart of \texttt{graph\_load} in C. It reads an
+edge-list file and returns a fully populated \texttt{Graph} object, or
+throws \texttt{FileNotFoundException} if the file cannot be opened.
+
+\subsection{Algorithm}
+
+The reader uses Java's \texttt{Scanner} for line-by-line parsing and a
+\texttt{HashSet<Integer>} to track which node IDs have already been seen,
+so each node is added to \texttt{graph.nodes} at most once.
+
+\begin{lstlisting}[caption={GraphReader — core parsing loop}]
+public Graph read(String filename) throws FileNotFoundException {
+    Graph graph = new Graph();
+    Scanner sc  = new Scanner(new File(filename));
+    Set<Integer> seen = new HashSet<>();
+
+    while (sc.hasNextLine()) {
+        String line = sc.nextLine().trim();
+        if (line.isEmpty()) continue;
+
+        String[] parts = line.split("\\s+");
+        if (parts.length < 4) continue;
+
+        String edgeName  = parts[0];
+        int    startNode = Integer.parseInt(parts[1]);
+        int    endNode   = Integer.parseInt(parts[2]);
+        double weight    = Double.parseDouble(parts[3]);
+
+        graph.edges.add(new Edge(edgeName, startNode, endNode, weight));
+
+        if (seen.add(startNode))
+            graph.nodes.add(new Node(startNode, 0, 0));
+        if (seen.add(endNode))
+            graph.nodes.add(new Node(endNode,   0, 0));
+    }
+    return graph;
+}
+\end{lstlisting}
+
+\subsection{Differences from the C implementation}
+
+\begin{itemize}
+  \item The C version uses a \textbf{two-pass} approach (validate first,
+        allocate exact arrays, fill on second pass) because \texttt{malloc}
+        requires a known size upfront. Java's \texttt{ArrayList} grows
+        dynamically, so a single pass suffices.
+  \item Error handling is done via \textbf{exceptions} (\texttt{FileNotFoundException},
+        \texttt{NumberFormatException}) rather than the C \texttt{graph\_err\_t}
+        enum with explicit exit codes.
+  \item Duplicate-edge detection and connectivity checking (BFS) present in
+        the C loader are not implemented in the Java version — the Swing GUI
+        handles bad inputs gracefully via \texttt{JOptionPane} dialogs.
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Layout Algorithms}
+
+\subsection{Abstract Base — \texttt{LayoutAlgorithm}}
+
+Both algorithms share a common interface declared in
+\texttt{algorithm/LayoutAlgorithm.java}:
+
+\begin{lstlisting}[caption={Abstract base class}]
+public abstract class LayoutAlgorithm {
+    public abstract void layout(Graph graph);
+}
+\end{lstlisting}
+
+This mirrors the C approach of having a function pointer (or separate
+function names) dispatched by the algorithm argument. In Java, the
+\texttt{ToolPanel} holds a \texttt{currentAlgorithm} field of type
+\texttt{LayoutAlgorithm} and polymorphically calls \texttt{layout()}.
+
+\subsection{Fruchterman-Reingold (\texttt{Fr})}
+
+The implementation in \texttt{algorithm/Fr.java} follows exactly the same
+physical simulation model as the C version.
+
+\subsubsection*{Constants}
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Constant} & \textbf{Value} & \textbf{Purpose} \\
+\midrule
+\texttt{WIDTH}      & 800   & Canvas width (pixels) \\
+\texttt{HEIGHT}     & 600   & Canvas height (pixels) \\
+\texttt{PADDING}    & 30    & Margin from edge so labels are never clipped \\
+\texttt{EPSILON}    & $10^{-4}$ & Guard against division by zero \\
+\texttt{ITERATIONS} & 1000  & Fixed simulation length \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsubsection*{Step 1 — Initialisation}
+
+A \texttt{HashMap<Integer,Integer>} maps each node's \texttt{id} to its
+index in \texttt{graph.nodes}. This is needed because the edge list stores
+IDs, not indices.
+
+The optimal edge length and initial temperature are:
+\[
+  k = \sqrt{\frac{W \cdot H}{n}}, \qquad
+  T_0 = \frac{W}{10}, \qquad
+  \Delta T = \frac{T_0}{\text{ITERATIONS}}
+\]
+
+All nodes are placed at random positions inside the padded canvas using
+\texttt{java.util.Random}.
+
+\subsubsection*{Step 2 — Simulation loop (1000 iterations)}
+
+\paragraph{A — Repulsive forces.}
+Every pair $(i,j)$ is compared. The repulsive force magnitude is
+\[
+  f_r = \frac{k^2}{d_{ij}}
+\]
+and the displacement of node $i$ is incremented along the unit direction
+$\hat{u}_{ij}$:
+
+\begin{lstlisting}[caption={Repulsive force accumulation}]
+double dx   = graph.nodes.get(i).X - graph.nodes.get(j).X;
+double dy   = graph.nodes.get(i).Y - graph.nodes.get(j).Y;
+double dist = Math.sqrt(dx*dx + dy*dy) + EPSILON;
+double fr   = (k * k) / dist;
+dispX[i] += (dx / dist) * fr;
+dispY[i] += (dy / dist) * fr;
+\end{lstlisting}
+
+\paragraph{B — Attractive forces (weighted).}
+Each edge pulls its endpoints together. The weight \texttt{e.len} scales
+the force identically to the C version:
+\[
+  f_a = \frac{d^2}{k} \cdot w_e
+\]
+
+\begin{lstlisting}[caption={Attractive force accumulation}]
+double fa    = (dist * dist / k) * e.len;
+dispX[vi] -= (dx / dist) * fa;
+dispY[vi] -= (dy / dist) * fa;
+dispX[ui] += (dx / dist) * fa;
+dispY[ui] += (dy / dist) * fa;
+\end{lstlisting}
+
+\paragraph{C — Temperature capping and boundary clamp.}
+Displacement is limited to the current temperature, then the node is
+clamped to the padded area:
+\[
+  \|\Delta \mathbf{p}_i\|_{\text{applied}} = \min(\|\Delta \mathbf{p}_i\|,\; T)
+\]
+\[
+  x_i \leftarrow \text{clamp}(x_i,\; \text{PADDING},\; W - \text{PADDING})
+\]
+
+\paragraph{D — Cooling.}
+At the end of each iteration: $T \leftarrow \max(0,\; T - \Delta T)$.
+
+\textbf{Memory note.} Unlike C, no manual \texttt{free} is needed for the
+displacement arrays \texttt{dispX}/\texttt{dispY}; they are local to
+\texttt{layout()} and garbage-collected after the method returns.
+
+\subsection{Tutte's Embedding (\texttt{Tutte})}
+
+The implementation in \texttt{algorithm/Tutte.java} follows Tutte's
+barycentric theorem.
+
+\subsubsection*{Constants}
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Constant} & \textbf{Value} & \textbf{Purpose} \\
+\midrule
+\texttt{RADIUS}    & $\min(W,H)\!\cdot\!0.4 - \text{PADDING}$ & Outer circle radius \\
+\texttt{MAX\_ITER} & 1000  & Iteration limit \\
+\texttt{TOLERANCE} & $10^{-6}$ & Convergence threshold \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsubsection*{Step 1 — Fix outer face}
+
+The first $n_{\text{fixed}} = \min(3, n)$ nodes are pinned to a triangle
+inscribed on a circle of radius \texttt{RADIUS} centred at $(W/2, H/2)$:
+\[
+  x_i = \frac{W}{2} + r\cos\!\left(\frac{2\pi i}{n_{\text{fixed}}}\right), \quad
+  y_i = \frac{H}{2} + r\sin\!\left(\frac{2\pi i}{n_{\text{fixed}}}\right)
+\]
+All inner nodes start at the canvas centre $(W/2,\, H/2)$.
+
+\subsubsection*{Step 2 — Adjacency list}
+
+The Java version builds the adjacency structure using
+\texttt{List<List<Integer>>} (an \texttt{ArrayList} of \texttt{ArrayList}s)
+rather than the manually allocated 2-D C arrays. This eliminates the
+\textit{two-pass degree count + malloc} pattern required in C.
+
+\begin{lstlisting}[caption={Adjacency list construction}]
+List<List<Integer>> adjList = new ArrayList<>();
+for (int i = 0; i < n; i++) adjList.add(new ArrayList<>());
+
+for (Edge e : graph.edges) {
+    Integer a = idToIndex.get(e.startNode);
+    Integer b = idToIndex.get(e.endNode);
+    if (a == null || b == null) continue;
+    adjList.get(a).add(b);
+    adjList.get(b).add(a);
+}
+\end{lstlisting}
+
+\subsubsection*{Step 3 — Gauss-Seidel relaxation}
+
+Each inner node is moved to the arithmetic mean of its neighbours'
+\emph{current} positions (in-place update, Gauss-Seidel style):
+\[
+  x_i \leftarrow \frac{1}{\deg(v_i)} \sum_{j \in N(i)} x_j, \quad
+  y_i \leftarrow \frac{1}{\deg(v_i)} \sum_{j \in N(i)} y_j
+\]
+
+\subsubsection*{Step 4 — Convergence check}
+
+After each node update, the squared displacement $\delta_i = (\Delta x_i)^2 +
+(\Delta y_i)^2$ is tracked. The loop exits early when
+$\max_i \delta_i < \varepsilon^2$.
+
+\subsubsection*{Limitations}
+
+Tutte's theorem guarantees a crossing-free embedding only for
+\textbf{3-connected planar graphs}. For disconnected or non-planar graphs,
+the output may contain edge crossings or overlapping nodes. The
+implementation does not verify planarity or connectivity before running.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Graphical Interface (Swing)}
+
+The GUI layer has no direct equivalent in the C project (which writes
+coordinates to a file, then delegates visualisation to a separate Python
+script). The Java version renders the graph in real time inside a
+\texttt{JFrame} and supports interactive navigation.
+
+\subsection{Window layout — \texttt{MainWindow}}
+
+\texttt{MainWindow} extends \texttt{JFrame} and assembles the three main
+panels using a \texttt{BorderLayout}:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Position} & \textbf{Component} & \textbf{Role} \\
+\midrule
+\texttt{CENTER} & \texttt{GraphPanel}      & Canvas — draws nodes and edges \\
+\texttt{EAST}   & \texttt{ToolPanel}       & File loading, algorithm selection \\
+\texttt{SOUTH}  & \texttt{CoordinatePanel} & Live cursor coordinates and zoom \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Window minimum size is $300 \times 200$\,px; default is $900 \times 600$\,px.
+
+\subsection{Canvas — \texttt{GraphPanel}}
+
+\texttt{GraphPanel} extends \texttt{JPanel} and overrides
+\texttt{paintComponent} to render the graph. It maintains three
+view-state variables:
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+\textbf{Field} & \textbf{Type} & \textbf{Meaning} \\
+\midrule
+\texttt{scale}   & \texttt{double} & Current zoom factor (starts at \texttt{1.0}) \\
+\texttt{offsetX} & \texttt{double} & Horizontal pan offset in screen pixels \\
+\texttt{offsetY} & \texttt{double} & Vertical pan offset in screen pixels \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\subsubsection*{Coordinate transform}
+
+Before drawing, an \texttt{AffineTransform} is applied so that graph
+coordinates map to screen coordinates:
+\[
+  \mathbf{p}_{\text{screen}} = \begin{pmatrix} \texttt{offsetX} \\ \texttt{offsetY} \end{pmatrix}
+  + \texttt{scale} \cdot \mathbf{p}_{\text{graph}}
+\]
+
+The inverse transform is used in mouse event handlers to convert a screen
+click back to graph space:
+\[
+  g_x = \frac{e.x - \texttt{offsetX}}{\texttt{scale}}, \quad
+  g_y = \frac{e.y - \texttt{offsetY}}{\texttt{scale}}
+\]
+
+\subsubsection*{Rendering pipeline}
+
+\begin{enumerate}
+  \item Apply \texttt{AffineTransform} to \texttt{Graphics2D} context.
+  \item Draw all edges as \texttt{Line2D.Double} segments.
+  \item Draw each node as a filled circle of radius \texttt{NODE\_RADIUS = 10}.
+  \item Draw each node's ID as a string label offset by
+        \texttt{(NODE\_RADIUS + 2, 4)} pixels.
+\end{enumerate}
+
+\subsection{Interaction}
+
+\subsubsection*{Zoom}
+
+Mouse wheel events call \texttt{onScroll}. The zoom factor per scroll
+tick is \texttt{ZOOM\_FACTOR = 1.03} (3\%). To keep the point under the
+cursor stationary during zoom, the offset is adjusted:
+
+\begin{lstlisting}[caption={Zoom centred on cursor}]
+double factor = (e.getPreciseWheelRotation() < 0) ? ZOOM_FACTOR : 1.0/ZOOM_FACTOR;
+offsetX = e.getX() - factor * (e.getX() - offsetX);
+offsetY = e.getY() - factor * (e.getY() - offsetY);
+scale  *= factor;
+\end{lstlisting}
+
+\subsubsection*{Pan}
+
+Dragging on an empty area (no node selected) translates the canvas by
+updating \texttt{offsetX} and \texttt{offsetY}:
+\[
+  \texttt{offsetX} \mathrel{+}= \Delta x_{\text{mouse}}, \quad
+  \texttt{offsetY} \mathrel{+}= \Delta y_{\text{mouse}}
+\]
+
+\subsubsection*{Node dragging}
+
+On \texttt{mousePressed}, the code finds the closest node to the cursor
+in graph space. If the distance is less than \texttt{NODE\_RADIUS / scale}
+(hit-test scaled to current zoom), that node is stored in
+\texttt{selectedNode}. Subsequent drag events move the node directly:
+\[
+  \texttt{node.X} \mathrel{+}= \frac{\Delta x_{\text{mouse}}}{\texttt{scale}}, \quad
+  \texttt{node.Y} \mathrel{+}= \frac{\Delta y_{\text{mouse}}}{\texttt{scale}}
+\]
+
+\subsection{Tool Panel — \texttt{ToolPanel}}
+
+\texttt{ToolPanel} (right side, \texttt{150 px} wide) provides:
+
+\begin{itemize}
+  \item \textbf{Select File} — opens a \texttt{JFileChooser} starting from
+        \texttt{./test-graphs/} (or the last opened directory). On
+        successful load, the chosen algorithm's \texttt{layout()} is run
+        immediately.
+  \item \textbf{Algorithm radio buttons} — \textit{Tutte} (default) and
+        \textit{FR}. Switching re-runs the layout on the current graph.
+  \item \textbf{Export PNG} — stub, not yet implemented.
+  \item \textbf{Reset View} — calls \texttt{GraphPanel.resetView()},
+        restoring \texttt{scale=1}, \texttt{offsetX=offsetY=0}.
+\end{itemize}
+
+\textbf{Design note.} The \texttt{tutteRadio.setSelected(true)} call is
+made \emph{before} the \texttt{ItemListener} is attached. This is
+intentional: attaching the listener first would trigger a layout run
+before any graph has been loaded.
+
+\subsection{Status Bar — \texttt{CoordinatePanel}}
+
+A thin strip at the bottom of the window displays three live values:
+
+\begin{itemize}
+  \item \textbf{Coordinate X / Y} — graph-space position of the mouse cursor,
+        updated on every \texttt{mouseMoved} event.
+  \item \textbf{Zoom} — current \texttt{scale} factor, updated on every
+        scroll event.
+\end{itemize}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Input File Format}
+
+The file format is identical to the C version: a plain-text edge list where
+each non-empty line describes one undirected edge as a 4-tuple:
+
+\[
+  \langle \textit{Name},\; \textit{ID}_A,\; \textit{ID}_B,\; \textit{Weight} \rangle
+\]
+
+\begin{center}
+\begin{tabular}{llll}
+\toprule
+\textbf{Field}  & \textbf{Type}   & \textbf{Constraints} & \textbf{Example} \\
+\midrule
+Name     & String  & No whitespace          & \texttt{L0\_12} \\
+$ID_A$   & int     & Positive integer       & \texttt{1} \\
+$ID_B$   & int     & Positive integer       & \texttt{2} \\
+Weight   & double  & Any double             & \texttt{1.0} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Fields are separated by whitespace. Blank lines and lines with fewer than
+4 fields are silently skipped by \texttt{GraphReader}. The vertex set is
+inferred automatically from the IDs encountered in the edge list — no
+explicit vertex count is required.
+
+\subsubsection*{Example}
+
+\begin{lstlisting}[style=plain,caption={test.txt --- a Petersen-like graph}]
+L0_12   1  2  1.0
+L0_23   2  3  1.0
+L0_13   1  3  1.0
+E1_14   1  4  1.0
+E1_25   2  5  1.0
+...
+C_910   9  10 1.0
+\end{lstlisting}
+
+This file defines 10 vertices and 24 edges. Vertex IDs need not be
+contiguous or start from 1; the reader handles arbitrary positive integers.
+
+\subsubsection*{Output}
+
+\texttt{GraphWriter} is currently a stub class. Coordinate output (the
+equivalent of the C \texttt{output\_write} function) has not been
+implemented; the primary output medium is the interactive Swing canvas.
+The \textbf{Export PNG} button in \texttt{ToolPanel} is also a planned
+but unfinished feature.
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Build and Run}
+
+\subsection{Requirements}
+
+\begin{itemize}
+  \item Java 17 or newer (any distribution: OpenJDK, Temurin, etc.)
+  \item An IDE such as IntelliJ IDEA is recommended; the \texttt{P2.iml}
+        module file is already included.
+\end{itemize}
+
+\subsection{Running from the command line}
+
+\begin{lstlisting}[style=bash,caption={Compile and run from project root}]
+# Compile all sources into out/
+javac -d out/ src/Main.java \
+      src/model/*.java      \
+      src/io/*.java         \
+      src/algorithm/*.java  \
+      src/gui/*.java
+
+# Run
+java -cp out Main
+\end{lstlisting}
+
+The application opens a $900 \times 600$\,px window. Use
+\textbf{Select File} in the right panel to load any \texttt{.txt}
+edge-list file, then choose a layout algorithm.
+
+\subsection{Running from IntelliJ IDEA}
+
+\begin{enumerate}
+  \item Open the project root directory (\texttt{File → Open}).
+  \item Mark \texttt{src/} as the Sources Root
+        (right-click → \textit{Mark Directory as → Sources Root}).
+  \item Run the \texttt{Main} class directly (\texttt{Shift+F10}).
+\end{enumerate}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\section{Java vs.\ C — Design Comparison}
+
+\begin{center}
+\begin{tabular}{p{3.5cm}p{5cm}p{5cm}}
+\toprule
+\textbf{Aspect} & \textbf{C implementation} & \textbf{Java implementation} \\
+\midrule
+Data structures  &
+  Structs (\texttt{vertex\_t}, \texttt{edge\_t}, \texttt{graph\_t}) with
+  explicit size counters &
+  Classes (\texttt{Node}, \texttt{Edge}, \texttt{Graph}) with
+  \texttt{ArrayList} \\
+\addlinespace
+Memory management &
+  Manual: \texttt{malloc}/\texttt{calloc}/\texttt{free};
+  two-pass load to compute exact sizes &
+  Automatic (GC); single-pass load with dynamic lists \\
+\addlinespace
+Error handling &
+  \texttt{graph\_err\_t} enum + process exit codes &
+  Java exceptions + \texttt{JOptionPane} dialogs \\
+\addlinespace
+Algorithm dispatch &
+  Conditional branch on a string argument &
+  Polymorphism via \texttt{LayoutAlgorithm} subclasses \\
+\addlinespace
+Visualisation &
+  Coordinates written to file; Python + matplotlib renders PNG &
+  Real-time interactive Swing canvas \\
+\addlinespace
+Adjacency list &
+  Two-pass: count degrees, \texttt{malloc}, fill &
+  \texttt{ArrayList<ArrayList<Integer>>} built in one pass \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+% ─────────────────────────────────────────────────────────────────────────────
+\end{document}

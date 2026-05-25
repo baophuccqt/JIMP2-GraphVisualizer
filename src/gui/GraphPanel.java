@@ -12,6 +12,7 @@ import java.awt.geom.Line2D;
 
 public class GraphPanel extends JPanel {
     private Graph graph;
+    private CoordinatePanel coordinatePanel;
 
     private double scale   = 1.0;
     private double offsetX = 0;
@@ -20,23 +21,85 @@ public class GraphPanel extends JPanel {
     private int dragStartX, dragStartY;
 
     private static final int    NODE_RADIUS  = 10;
-    private static final double ZOOM_FACTOR  = 1.05; // 5% per scroll tick
+    private static final double ZOOM_FACTOR  = 1.03; // 3% per scroll tick
 
-    public GraphPanel() {
+    private static Node selectedNode = null;
+
+    //method for labels
+    private boolean showLabels = true;
+    public void setShowLabels(boolean showLabels) {
+        this.showLabels = showLabels;
+        repaint(); // odśwież widok po zmianie
+    }
+
+    public GraphPanel(CoordinatePanel coordinatePanel) {
+        this.coordinatePanel = coordinatePanel;
         setBackground(Color.WHITE);
-        addMouseWheelListener(this::onScroll);
+
+        // Zoom feature
+        addMouseWheelListener(e -> onScroll(e));
+
+        // Select and release node
         addMouseListener(new MouseAdapter() {
             @Override public void mousePressed(MouseEvent e) {
                 dragStartX = e.getX();
                 dragStartY = e.getY();
+
+                // coordinates that we that checking for dragging
+                double gx = (e.getX() - offsetX) / scale;
+                double gy = (e.getY() - offsetY) / scale;
+                double dist = Double.MAX_VALUE;
+                Node tmpNode = null;
+
+                if (graph == null) {
+                    return;
+                }
+
+                for (Node node: graph.nodes) {
+                    double distance = Math.sqrt((gx - node.X) * (gx - node.X) + (gy - node.Y) * (gy - node.Y));
+                    if (dist > distance) {
+                        dist = distance;
+                        tmpNode = node;
+                    }
+                }
+
+                if (dist < NODE_RADIUS / scale) {
+                    selectedNode = tmpNode;
+                } else {
+                    selectedNode = null;
+                }
             }
-        });
-        addMouseMotionListener(new MouseMotionAdapter() {
-            @Override public void mouseDragged(MouseEvent e) {
-                offsetX += e.getX() - dragStartX;
-                offsetY += e.getY() - dragStartY;
+
+            @Override public void mouseReleased(MouseEvent e) {
                 dragStartX = e.getX();
                 dragStartY = e.getY();
+            }
+        });
+
+        // Mouse drag
+        addMouseMotionListener(new MouseMotionAdapter() {
+            @Override public void mouseMoved(MouseEvent e) {
+                double gx = (e.getX() - offsetX) / scale;
+                double gy = (e.getY() - offsetY) / scale;
+                coordinatePanel.setCoordinates(gx, gy);
+            }
+
+            @Override public void mouseDragged(MouseEvent e) {
+                if (selectedNode != null) {
+                    selectedNode.X += (e.getX() - dragStartX) / scale;
+                    selectedNode.Y += (e.getY() - dragStartY) / scale;
+
+                    double gx = (e.getX() - offsetX) / scale;
+                    double gy = (e.getY() - offsetY) / scale;
+                    coordinatePanel.setCoordinates(gx, gy);
+                } else {
+                    offsetX += e.getX() - dragStartX;
+                    offsetY += e.getY() - dragStartY;
+                }
+
+                dragStartX = e.getX();
+                dragStartY = e.getY();
+
                 repaint();
             }
         });
@@ -64,11 +127,15 @@ public class GraphPanel extends JPanel {
         // getPreciseWheelRotation() handles touchpad fractional values correctly.
         // getWheelRotation() truncates to int, causing touchpad events near 0 to always zoom in.
         double factor = (e.getPreciseWheelRotation() < 0) ? ZOOM_FACTOR : 1.0 / ZOOM_FACTOR;
+        if (scale * factor >= 50000) return;
+
         double mx = e.getX();
         double my = e.getY();
         offsetX = mx - factor * (mx - offsetX);
         offsetY = my - factor * (my - offsetY);
         scale  *= factor;
+
+        coordinatePanel.setScale(scale);
         repaint();
     }
 
@@ -84,10 +151,21 @@ public class GraphPanel extends JPanel {
         super.paintComponent(g);
         if (graph == null) return;
 
+        g.setColor(new Color(200, 200, 200));
+        int spacing =  20;
+
+        // small dots pattern
+        for (int x = 0; x < getWidth(); x += spacing) {
+            for (int y = 0; y < getHeight(); y += spacing) {
+                g.fillOval(x - 1, y - 1, 2, 2);
+            }
+        }
+
         Graphics2D g2 = (Graphics2D) g;
         g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
         AffineTransform original = g2.getTransform();
+        AffineTransform at = new AffineTransform();
         g2.translate(offsetX, offsetY);
         g2.scale(scale, scale);
 
@@ -119,7 +197,25 @@ public class GraphPanel extends JPanel {
             double x2 = b.X - ux * r;
             double y2 = b.Y - uy * r;
 
+            g2.setColor(Color.BLACK);
             g2.draw(new Line2D.Double(x1, y1, x2, y2));
+
+            //drawing labels for edges
+            if (showLabels) {
+                double midX = (x1 + x2) / 2;
+                double midY = (y1 + y2) / 2;
+
+                AffineTransform labelsAt = g2.getTransform();
+                g2.translate(midX, midY);
+                g2.scale(1/scale, 1/scale);
+
+                g2.setColor(Color.BLUE);
+                String label = String.format("%.2f", e.len);
+                g2.drawString(label, 0, 0);
+
+                g2.setTransform(labelsAt);
+            }
+
         }
 
         // Restore transform so nodes stay fixed size on screen
@@ -132,8 +228,10 @@ public class GraphPanel extends JPanel {
             g2.setColor(Color.RED);
             g2.fillOval(sx - NODE_RADIUS, sy - NODE_RADIUS, NODE_RADIUS * 2, NODE_RADIUS * 2);
 
-            g2.setColor(Color.BLACK);
-            g2.drawString(String.valueOf(node.id), sx + NODE_RADIUS + 2, sy + 4);
+            if (showLabels) {
+                g2.setColor(Color.BLACK);
+                g2.drawString("ID: " + node.id, sx + NODE_RADIUS, sy - NODE_RADIUS);
+            }
         }
     }
 }

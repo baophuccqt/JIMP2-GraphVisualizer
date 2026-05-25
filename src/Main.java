@@ -8,6 +8,5 @@ class Main {
 
     public static void main(String[] args) throws FileNotFoundException {
         SwingUtilities.invokeLater(() -> new MainWindow());
-
     }
 }
