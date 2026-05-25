@@ -5,32 +5,36 @@ import java.lang.foreign.*;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.VarHandle;
 
+/**
+ * Layout algorithm implementation using Project Panama (Foreign Function & Memory API)
+ * to offload Fruchterman-Reingold force-directed layout calculations to a native C library.
+ */
 public class PanamaFruchterman extends LayoutAlgorithm {
 
-    // 1. Układ pamięci dla struktury 'Node' z graph.h
+    // 1. Memory layout matching the native 'Node' struct defined in C (graph.h)
     private static final GroupLayout NATIVE_NODE_LAYOUT = MemoryLayout.structLayout(
-            ValueLayout.ADDRESS.withName("name"),
-            ValueLayout.JAVA_DOUBLE.withName("x"),
-            ValueLayout.JAVA_DOUBLE.withName("y")
+            ValueLayout.ADDRESS.withName("name"),      // char* name (8 bytes on 64-bit)
+            ValueLayout.JAVA_DOUBLE.withName("x"),     // double x   (8 bytes)
+            ValueLayout.JAVA_DOUBLE.withName("y")      // double y   (8 bytes)
     );
 
-    // 2. Układ pamięci dla struktury 'Edge' z graph.h
+    // 2. Memory layout matching the native 'Edge' struct defined in C (graph.h)
     private static final GroupLayout NATIVE_EDGE_LAYOUT = MemoryLayout.structLayout(
-            ValueLayout.ADDRESS.withName("name"),
-            ValueLayout.JAVA_INT.withName("node1_index"),
-            ValueLayout.JAVA_INT.withName("node2_index"),
-            ValueLayout.JAVA_DOUBLE.withName("weight")
+            ValueLayout.ADDRESS.withName("name"),      // char* name       (8 bytes)
+            ValueLayout.JAVA_INT.withName("node1_index"), // int node1_index (4 bytes)
+            ValueLayout.JAVA_INT.withName("node2_index"), // int node2_index (4 bytes)
+            ValueLayout.JAVA_DOUBLE.withName("weight")   // double weight   (8 bytes)
     );
 
-    // 3. Układ pamięci dla struktury 'Graph' z graph.h
+    // 3. Memory layout matching the native main 'Graph' struct defined in C (graph.h)
     private static final GroupLayout NATIVE_GRAPH_LAYOUT = MemoryLayout.structLayout(
-            ValueLayout.ADDRESS.withName("nodes"),
-            ValueLayout.ADDRESS.withName("edges"),
-            ValueLayout.JAVA_INT.withName("n_count"),
-            ValueLayout.JAVA_INT.withName("e_count")
+            ValueLayout.ADDRESS.withName("nodes"),     // Node* nodes (pointer to array)
+            ValueLayout.ADDRESS.withName("edges"),     // Edge* edges (pointer to array)
+            ValueLayout.JAVA_INT.withName("n_count"),  // int n_count (number of nodes)
+            ValueLayout.JAVA_INT.withName("e_count")   // int e_count (number of edges)
     );
 
-    // Dynamiczne uchwyty do pól struktur (eliminują potrzebę ręcznego wpisywania offsetów typu 8, 12, 16)
+    // Dynamic variable handles to safely access individual struct members without hardcoded offsets
     private static final VarHandle NODE_NAME = NATIVE_NODE_LAYOUT.varHandle(MemoryLayout.PathElement.groupElement("name"));
     private static final VarHandle NODE_X = NATIVE_NODE_LAYOUT.varHandle(MemoryLayout.PathElement.groupElement("x"));
     private static final VarHandle NODE_Y = NATIVE_NODE_LAYOUT.varHandle(MemoryLayout.PathElement.groupElement("y"));
@@ -45,23 +49,29 @@ public class PanamaFruchterman extends LayoutAlgorithm {
     private static final VarHandle GRAPH_N_COUNT = NATIVE_GRAPH_LAYOUT.varHandle(MemoryLayout.PathElement.groupElement("n_count"));
     private static final VarHandle GRAPH_E_COUNT = NATIVE_GRAPH_LAYOUT.varHandle(MemoryLayout.PathElement.groupElement("e_count"));
 
+    // Method handle serving as a direct invocation bridge to the C function
     private static MethodHandle runFruchtermanHandle;
 
     static {
         try {
+            // Load the shared native library compiled from C
             System.loadLibrary("graphalgo");
             SymbolLookup lookup = SymbolLookup.loaderLookup();
             Linker linker = Linker.nativeLinker();
 
+            // Locate the function symbol inside the loaded library
             MemorySegment functionAddress = lookup.find("run_fruchterman").orElseThrow(() ->
-                    new UnsatisfiedLinkError("Nie znaleziono funkcji run_fruchterman w pliku DLL")
+                    new UnsatisfiedLinkError("Could not find run_fruchterman function in the native library")
             );
 
+            // Define the C function signature: void run_fruchterman(Graph* g)
             FunctionDescriptor descriptor = FunctionDescriptor.ofVoid(ValueLayout.ADDRESS);
+
+            // Create the downcall handle allowing Java to call the C function
             runFruchtermanHandle = linker.downcallHandle(functionAddress, descriptor);
 
         } catch (UnsatisfiedLinkError e) {
-            System.err.println("Błąd ładowania biblioteki DLL. Upewnij się, że archiwum graphalgo.dll znajduje się w java.library.path.");
+            System.err.println("Error loading native library. Ensure graphalgo library is available in java.library.path.");
             e.printStackTrace();
         }
     }
@@ -71,31 +81,33 @@ public class PanamaFruchterman extends LayoutAlgorithm {
         int nCount = javaGraph.nodes.size();
         if (nCount == 0 || runFruchtermanHandle == null) return;
 
+        // Use a bounded Arena to safely allocate off-heap memory; auto-frees memory when block exits
         try (Arena arena = Arena.ofConfined()) {
 
             // ==========================================
-            // 1. ALOKACJA I KOPIOWANIE WIERZCHOŁKÓW (NODES)
+            // 1. ALLOCATE AND COPY NODES ARRAY TO NATIVE
             // ==========================================
             MemorySegment nativeNodesArray = arena.allocate(NATIVE_NODE_LAYOUT, nCount);
 
             for (int i = 0; i < nCount; i++) {
                 model.Node jNode = javaGraph.nodes.get(i);
+                // Slice the continuous array memory block to get the specific Node struct element segment
                 MemorySegment nodeElement = nativeNodesArray.asSlice(
                         i * NATIVE_NODE_LAYOUT.byteSize(),
                         NATIVE_NODE_LAYOUT.byteSize()
                 );
 
-                // Alokacja nazwy wierzchołka z poprawnym kodowaniem UTF-8
+                // Allocate native null-terminated C-string for the node identifier using UTF-8
                 MemorySegment nativeString = arena.allocateFrom("ID_" + jNode.id, java.nio.charset.StandardCharsets.UTF_8);
 
-                // Zapis danych przy użyciu VarHandle i wymaganego przesunięcia 0L
+                // Write the values into the native struct memory layout
                 NODE_NAME.set(nodeElement, 0L, nativeString);
                 NODE_X.set(nodeElement, 0L, (double) jNode.X);
                 NODE_Y.set(nodeElement, 0L, (double) jNode.Y);
             }
 
             // ==========================================
-            // 2. ALOKACJA I KOPIOWANIE KRAWĘDZI (EDGES)
+            // 2. ALLOCATE AND COPY EDGES ARRAY TO NATIVE
             // ==========================================
             int eCount = javaGraph.edges.size();
             MemorySegment nativeEdgesArray = arena.allocate(NATIVE_EDGE_LAYOUT, eCount);
@@ -107,10 +119,11 @@ public class PanamaFruchterman extends LayoutAlgorithm {
                         NATIVE_EDGE_LAYOUT.byteSize()
                 );
 
+                // Allocate native C-string for the edge name
                 MemorySegment edgeName = arena.allocateFrom("E_" + i, java.nio.charset.StandardCharsets.UTF_8);
                 EDGE_NAME.set(edgeElement, 0L, edgeName);
 
-                // Oczyszczanie ID z przedrostków tekstowych w celu dokładnego porównania typu String
+                // Strip text prefixes to accurately compare node IDs as strings and map them to C array indices
                 int idx1 = -1;
                 int idx2 = -1;
                 String targetStart = String.valueOf(jEdge.startNode).replace("ID_", "").trim();
@@ -126,18 +139,18 @@ public class PanamaFruchterman extends LayoutAlgorithm {
                     }
                 }
 
-                // Zabezpieczenie na wypadek braku dopasowania – zapobiega ujemnym indeksom w pamięci C
+                // Fallback safe guard to prevent negative or boundary indices out of bounds in C memory
                 if (idx1 == -1) idx1 = 0;
                 if (idx2 == -1) idx2 = 0;
 
-                // Zapis struktury krawędzi przy użyciu VarHandle i przesunięcia 0L
+                // Write mapped indices and edge attributes into the native edge struct
                 EDGE_NODE1.set(edgeElement, 0L, idx1);
                 EDGE_NODE2.set(edgeElement, 0L, idx2);
                 EDGE_WEIGHT.set(edgeElement, 0L, (double) jEdge.len);
             }
 
             // ==========================================
-            // 3. BUDOWANIE GŁÓWNEJ STRUKTURY GRAPH
+            // 3. BUILD THE MAIN GRAPH STRUCTURE FOR C
             // ==========================================
             MemorySegment nativeGraphStruct = arena.allocate(NATIVE_GRAPH_LAYOUT);
             GRAPH_NODES.set(nativeGraphStruct, 0L, nativeNodesArray);
@@ -146,12 +159,12 @@ public class PanamaFruchterman extends LayoutAlgorithm {
             GRAPH_E_COUNT.set(nativeGraphStruct, 0L, eCount);
 
             // ==========================================
-            // 4. URUCHOMIENIE OBLICZEŃ NATYWNYCH W PLIKU DLL
+            // 4. EXECUTE THE NATIVE CALCULATIONS IN THE LIBRARY
             // ==========================================
             runFruchtermanHandle.invokeExact(nativeGraphStruct);
 
             // ==========================================
-            // 5. ODEBRANIE I AKTUALIZACJA WSPÓŁRZĘDNYCH W JAVIE
+            // 5. EXTRACT NEW COORDINATES BACK INTO JAVA
             // ==========================================
             for (int i = 0; i < nCount; i++) {
                 model.Node jNode = javaGraph.nodes.get(i);
@@ -160,13 +173,13 @@ public class PanamaFruchterman extends LayoutAlgorithm {
                         NATIVE_NODE_LAYOUT.byteSize()
                 );
 
-                // Pobranie nowych współrzędnych X i Y z pamięci natywnej
+                // Update Java objects with the fresh computed positions calculated by the C library
                 jNode.X = (double) NODE_X.get(nodeElement, 0L);
                 jNode.Y = (double) NODE_Y.get(nodeElement, 0L);
             }
 
         } catch (Throwable t) {
-            System.err.println("Wystąpił błąd podczas wywołania PanamaFruchterman:");
+            System.err.println("An error occurred during PanamaFruchterman native execution:");
             t.printStackTrace();
         }
     }
