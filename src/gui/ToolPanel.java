@@ -204,17 +204,14 @@ public class ToolPanel extends JPanel {
             File file = saveChooser.getSelectedFile();
             String path = file.getAbsolutePath();
 
-            // Automatyczne dodawanie rozszerzenia .txt
             if (!path.toLowerCase().endsWith(".txt")) {
                 path += ".txt";
             }
 
-            // Wywołanie wbudowanej, stabilnej metody zapisu pliku tekstowego w Javie
             exportToTxt(currentGraph, path);
         }
     }
 
-    // NOWA METODA: Bezpieczny i bezbłędny zapis po stronie wirtualnej maszyny Javy
     public void exportToTxt(Graph javaGraph, String filePath) {
         try (PrintWriter writer = new PrintWriter(new FileWriter(filePath))) {
             writer.println("[WIERZCHOLKI]");
